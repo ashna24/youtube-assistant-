@@ -19,13 +19,12 @@ load_dotenv()
 st.set_page_config(page_title="YT Research Assistant", page_icon="🤖", layout="wide")
 st.title("YouTube Assistant!")
 
-url = st.text_input("Enter YouTube video URL here:", placeholder="https://youtube.com/...")
-
 st.caption("Chat with any video to extract insights and summaries.")
+
+url = st.text_input("Enter YouTube video URL here:", placeholder="https://youtube.com/...")
 
 st.markdown("""
     <style>
-    /* 1. Import a cleaner font */
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
 
     html, body, [data-testid="stAppViewContainer"] {
@@ -33,7 +32,7 @@ st.markdown("""
         background: radial-gradient(circle at top left, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
     }
 
-    /*  the Sidebar 
+    /* The Sidebar */
     [data-testid="stSidebar"] {
         background-color: rgba(255, 255, 255, 0.03) !important;
         backdrop-filter: blur(10px);
@@ -66,7 +65,6 @@ st.markdown("""
         backdrop-filter: blur(20px);
     }
 
-    /* 6. Hide the default Streamlit header/footer for a clean look */
     header {visibility: hidden;}
     footer {visibility: hidden;}
     </style>
@@ -87,7 +85,7 @@ user_query = st.chat_input("What would you like to know about this video?")
 if url:
     with st.status("Analyzing Video...", expanded=True) as status:
         try:     
-            loader = YoutubeLoader.from_youtube_url(url, add_video_info = True , language = ["en", "en-US", "hi", "ur"], translation = "en")
+            loader = YoutubeLoader.from_youtube_url(url, add_video_info = False , language = ["en", "en-US", "hi", "ur"], translation = "en")
             data= loader.load()
 
         except Exception as e:
@@ -118,10 +116,13 @@ if url:
     user_question = st.text_input("Ask a question about the video content:")
 
     if user_question:
-        with st.spinner("thinking..."):
-            response = qa_chain.invoke(user_question)
-            st.write("Answer:")
-            st.write(response)
+        with st.chat_message("user"):
+            st.write(user_query)
+            
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                response = qa_chain.invoke({"query": user_query})
+                st.write(response["result"])
 
 
 
