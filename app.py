@@ -16,16 +16,90 @@ from langchain_classic.chains import RetrievalQA
 
 load_dotenv()
 
-st.title("YouTube Research Assistant!")
-st.write("Environment is set up and ready!")
+st.set_page_config(page_title="YT Research Assistant", page_icon="🤖", layout="wide")
+st.title("YouTube Assistant!")
 
-url = st.text_input("Enter YouTube video URL here:")
+url = st.text_input("Enter YouTube video URL here:", placeholder="https://youtube.com/...")
+
+st.caption("Chat with any video to extract insights and summaries.")
+
+st.markdown("""
+    <style>
+    /* 1. Import a cleaner font */
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
+
+    html, body, [data-testid="stAppViewContainer"] {
+        font-family: 'Outfit', sans-serif;
+        background: radial-gradient(circle at top left, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    }
+
+    /*  the Sidebar 
+    [data-testid="stSidebar"] {
+        background-color: rgba(255, 255, 255, 0.03) !important;
+        backdrop-filter: blur(10px);
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+ 
+    .main-title {
+        background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 700;
+        font-size: 3rem;
+        text-align: center;
+        padding-bottom: 20px;
+    }
+
+    [data-testid="stChatMessage"] {
+        background: rgba(255, 255, 255, 0.05) !important;
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px !important;
+        margin-bottom: 15px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .stChatInputContainer {
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(0, 242, 254, 0.3) !important;
+        border-radius: 30px !important;
+        backdrop-filter: blur(20px);
+    }
+
+    /* 6. Hide the default Streamlit header/footer for a clean look */
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
+    
+with st.sidebar:
+    st.title("Welcome to the YouTube Assistant!")
+    st.markdown("---")
+    
+    st.info("This Youtube assistant uses Gemini 2.5 Flash to analyze video transcripts.")
+
+    st.warning("⚠️ **Important:** Please ensure the YouTube video has closed captions or transcripts enabled. The AI cannot analyze videos without text data.")
+
+st.subheader("💬 Ask a Question")
+user_query = st.chat_input("What would you like to know about this video?")
+
 
 if url:
-    with st.spinner("Fetching video and extracting transcript..."):
-        #fetch and extract transcript 
-        loader = YoutubeLoader.from_youtube_url(url, add_video_info = False)
-        data= loader.load()
+    with st.status("Analyzing Video...", expanded=True) as status:
+        try:     
+            loader = YoutubeLoader.from_youtube_url(url, add_video_info = True , language = ["en", "en-US", "hi", "ur"], translation = "en")
+            data= loader.load()
+
+        except Exception as e:
+            status.update(label="Transcript Error", state="error", expanded=True)
+            st.error("Couldn't extract the text. The video might have captions completely disabled.")
+            st.info(f"Developer Details: {e}")
+            st.stop()
+
+        if not data:
+            status.update(label="Error: No Transcript Found!", state="error", expanded=True)
+            st.error("couldn't extract text from this video. It might not have closed captions enabled. Please try a different link!")
+            st.stop()
 
         #chunking 
         textSplitter = RecursiveCharacterTextSplitter(chunk_size = 1000, chunk_overlap = 100)
