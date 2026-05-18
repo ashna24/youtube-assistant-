@@ -13,6 +13,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import Chroma
 from langchain_classic.chains import RetrievalQA
+from langchain_core.documents import Document
 
 load_dotenv()
 
@@ -78,59 +79,59 @@ with st.sidebar:
 
     st.warning("⚠️ **Important:** Please ensure the YouTube video has closed captions or transcripts enabled. The AI cannot analyze videos without text data.")
 
-st.subheader("💬 Ask a Question")
-user_query = st.chat_input("What would you like to know about this video?")
-
-
+# MAIN LOGIC
 if url:
+    data = None
+    
+    # STEP 1: Try the automated scraper
     with st.status("Analyzing Video...", expanded=True) as status:
         try:     
-            loader = YoutubeLoader.from_youtube_url(url, add_video_info = False , language = ["en", "en-US", "hi", "ur"], translation = "en")
-            data= loader.load()
+            loader = YoutubeLoader.from_youtube_url(url, add_video_info=False, language=["en", "en-US", "hi", "ur"], translation="en")
+            data = loader.load()
+            status.update(label=" Video Processed Automatically!", state="complete", expanded=False)
 
         except Exception as e:
-            status.update(label="Transcript Error", state="error", expanded=True)
-            st.error("Couldn't extract the text. The video might have captions completely disabled.")
-            st.info(f"Developer Details: {e}")
+            status.update(label=" YouTube Blocked the Request", state="error", expanded=True)
+            st.warning("YouTube's security system blocked the automatic download. But your AI pipeline is still ready!")
+            
+    # STEP 2: The Fallback UI (If automated scraper fails or returns empty)
+    if not data:
+        st.markdown("---")
+        st.info(" **Manual Override:** Go to the YouTube video, click 'Show Transcript', copy the text, and paste it below.")
+        manual_transcript = st.text_area("Paste the video transcript here:", height=200)
+        
+        if manual_transcript:
+            data = [Document(page_content=manual_transcript)]
+            st.success(" Manual transcript accepted!")
+        else:
+            # Stop the app here and wait for the user to paste the text
             st.stop()
 
-        if not data:
-            status.update(label="Error: No Transcript Found!", state="error", expanded=True)
-            st.error("couldn't extract text from this video. It might not have closed captions enabled. Please try a different link!")
-            st.stop()
-
-        #chunking 
-        textSplitter = RecursiveCharacterTextSplitter(chunk_size = 1000, chunk_overlap = 100)
+    # STEP 3: Proceed with the RAG Pipeline (Works for both auto and manual data)
+    if data:
+        # Chunking 
+        textSplitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         text = textSplitter.split_documents(data)
 
-        #embeddings & storage in chroma
+        # Embeddings & storage in Chroma
         embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001") 
-        vector_db = Chroma.from_documents(text , embeddings)
+        vector_db = Chroma.from_documents(text, embeddings)
 
         # Set up Retriever & Retrieval Chain
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
-        qa_chain = RetrievalQA.from_chain_type(llm =llm , chain_type = "stuff" , retriever = vector_db.as_retriever())
+        qa_chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=vector_db.as_retriever())
 
-    st.success("video processed! please ask your questions now!")
+        st.success("Data embedded! Please ask your questions below.")
+        st.markdown("---")
+        
+        st.subheader("💬 Ask a Question")
+        user_query = st.chat_input("What would you like to know about this video?")
 
-    user_question = st.text_input("Ask a question about the video content:")
-
-    if user_question:
-        with st.chat_message("user"):
-            st.write(user_query)
-            
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                response = qa_chain.invoke({"query": user_query})
-                st.write(response["result"])
-
-
-
-
-
-
-
-
-
-    
-
+        if user_query:
+            with st.chat_message("user"):
+                st.write(user_query)
+                
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    response = qa_chain.invoke({"query": user_query})
+                    st.write(response["result"])
